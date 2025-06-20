@@ -1,33 +1,15 @@
-
 import time
-from datetime import datetime, timedelta
+import requests
 
-# Simula análise de sinais
-def detectar_sinais():
-    return ["SOL/USDT", "RENDER/USDT", "TIA/USDT", "ONDO/USDT", "AI16Z/USDT", "NEAR/USDT", "PENDLE/USDT"]
+def executar_ordem_bingx(tipo, par, quantidade, sl, api_key, api_secret):
+    print(f"[{tipo.upper()}] {par} - Qtd: {quantidade} - SL: {sl}%")
+    # Aqui entra a lógica real da BingX com envio de ordens
 
-# Parâmetros
-stop_loss = 2.0
-quantidade = 10
-intervalo_reentrada_min = 10
-
-# Histórico dos últimos sinais (em memória)
-historico_sinais = {}
-
-print("Robô iniciado em", datetime.now())
+ativos = ['NEAR/USDT', 'PENDLE/USDT', 'SOL/USDT', 'RENDER/USDT', 'TIA/USDT', 'ONDO/USDT', 'AI16Z/USDT']
 
 while True:
-    sinais = detectar_sinais()
-    agora = datetime.now()
-
-    for par in sinais:
-        ultimo = historico_sinais.get(par)
-
-        if not ultimo or (agora - ultimo) > timedelta(minutes=intervalo_reentrada_min):
-            print(f"[BUY] {par} - Qtd: {quantidade} - SL: {stop_loss}%")
-            historico_sinais[par] = agora
-        else:
-            tempo_restante = intervalo_reentrada_min - (agora - ultimo).seconds // 60
-            print(f"[IGNORADO] {par} - aguardando {tempo_restante} min para nova entrada")
-
-    time.sleep(1)
+    for par in ativos:
+        # Simulação de lógica: leitura de sinal (ex: RSI, Pivot, etc.)
+        # Entrada (exemplo) se condição atender:
+        executar_ordem_bingx('buy', par, 10, 2.0, 'SUA_API_KEY', 'SUA_API_SECRET')
+    time.sleep(1)  # Executa a cada segundo
