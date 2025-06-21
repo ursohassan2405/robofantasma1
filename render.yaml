@@ -1,8 +1,10 @@
-
 services:
   - type: web
     name: robofantasma1
     env: python
+    plan: starter
     buildCommand: ""
-    startCommand: "python src/main.py"
-    plan: free
+    startCommand: "python main.py"
+    envVars:
+      - key: PYTHON_VERSION
+        value: 3.10.12
