@@ -1,3 +1,2 @@
+websockets
 pandas
-requests
-websocket-client
