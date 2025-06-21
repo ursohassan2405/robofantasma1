@@ -1,2 +1,5 @@
-websockets
+websockets==10.4
 pandas
+numpy
+python-dateutil
+pytz
