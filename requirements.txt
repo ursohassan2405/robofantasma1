@@ -1,6 +1,1 @@
-websocket-client
-pandas
-requests
-ccxt
-python-dotenv
-numpy
+websockets
