@@ -44,3 +44,16 @@ async def stream_bingx():
 if __name__ == "__main__":
     print(f"[{now_br().strftime('%Y-%m-%d %H:%M:%S')}] 🔄 BOTTOMAN V1 iniciado - Robô ativo com WebSocket + RSI + Reentrada por distância")
     asyncio.run(stream_bingx())
+
+
+if __name__ == "__main__":
+    try:
+        print("🚀 Iniciando o robô...")
+        asyncio.run(main())
+    except Exception as e:
+        import traceback
+        print("🚨 ERRO FATAL AO INICIAR O ROBÔ")
+        print("Tipo:", type(e).__name__)
+        print("Detalhes:", str(e))
+        print("Traceback:")
+        traceback.print_exc()
