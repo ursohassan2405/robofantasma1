@@ -1,3 +1,6 @@
-websockets==11.0.3
+websocket-client
 pandas
+requests
+ccxt
+python-dotenv
 numpy
