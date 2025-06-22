@@ -1,33 +1,46 @@
+import asyncio
+import websockets
+import json
+from datetime import datetime, timedelta
+from core import (
+    SYMBOLS, price_history, last_indicator_update, now_br, now_utc,
+    calcular_indicadores, atualizar_trades, verificar_sinal, entrar_trade
+)
 
-import time
-import requests
-
-# Função para obter o último candle 4h da BingX com retry
-def obter_candle_4h_bingx(symbol="NEAR-USDT"):
-    url = "https://open-api.bingx.com/openApi/quote/v1/kline"
-    params = {
-        "symbol": symbol,
-        "interval": "4h",
-        "limit": 1
-    }
+async def stream_bingx():
+    uri = "wss://open-api-swap.bingx.com/swap-market"
     while True:
         try:
-            response = requests.get(url, params=params, timeout=10)
-            if response.status_code == 200:
-                data = response.json()
-                if "data" in data and len(data["data"]) > 0:
-                    candle = data["data"][0]
-                    print(f"[{datetime.now()}] Candle 4h capturado com sucesso: {candle}")
-                    return candle
-                else:
-                    print(f"[{datetime.now()}] Nenhum dado retornado. Repetindo em 60s...")
-            else:
-                print(f"[{datetime.now()}] Erro HTTP {response.status_code}. Repetindo em 60s...")
+            async with websockets.connect(uri) as ws:
+                for symbol in SYMBOLS:
+                    sub_msg = {
+                        "id": symbol,
+                        "reqType": "sub",
+                        "dataType": f"trade.{symbol}",
+                        "dataSize": 1
+                    }
+                    await ws.send(json.dumps(sub_msg))
+                print(f"[{now_br().strftime('%Y-%m-%d %H:%M:%S')}] ✅ Conectado ao WebSocket da BingX")
+                while True:
+                    try:
+                        msg = await ws.recv()
+                        data = json.loads(msg)
+                        if "data" in data and isinstance(data["data"], list):
+                            price = float(data["data"][0]["price"])
+                            symbol = data["symbol"]
+                            agora = datetime.utcnow()
+                            price_history[symbol].append(price)
+                            atualizar_trades(symbol, price)
+                            direcao = verificar_sinal(symbol, price, agora)
+                            if direcao:
+                                entrar_trade(symbol, direcao, price, agora)
+                    except Exception as e:
+                        print(f"[{now_br().strftime('%Y-%m-%d %H:%M:%S')}] ⚠️ Erro interno na leitura de dados:", e)
+                        await asyncio.sleep(1)
         except Exception as e:
-            print(f"[{datetime.now()}] Erro ao conectar com a API da BingX: {e}. Tentando novamente em 60s...")
-        time.sleep(60)
+            print(f"[{now_br().strftime('%Y-%m-%d %H:%M:%S')}] ❌ Erro de conexão. Tentando reconectar...", e)
+            await asyncio.sleep(5)
 
-# Exemplo de uso
 if __name__ == "__main__":
-    candle = obter_candle_4h_bingx("NEAR-USDT")
-    # Aqui seguiria a lógica para iniciar o robô após obter o candle
+    print(f"[{now_br().strftime('%Y-%m-%d %H:%M:%S')}] 🔄 BOTTOMAN V1 iniciado - Robô ativo com WebSocket + RSI + Reentrada por distância")
+    asyncio.run(stream_bingx())

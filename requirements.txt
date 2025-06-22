@@ -1,3 +1,2 @@
-websockets
-pandas
-numpy
+requests
+websocket-client
