@@ -1,24 +1,9 @@
 import asyncio
 import websockets
-import hmac
-import hashlib
-import base64
 import json
-import time
-import os
 import gzip
 from io import BytesIO
-from dotenv import load_dotenv
 from datetime import datetime
-
-load_dotenv()
-API_KEY = os.getenv("BINGX_API_KEY")
-SECRET_KEY = os.getenv("BINGX_SECRET_KEY")
-
-def get_signature(timestamp, api_key, secret_key):
-    pre_sign = f"timestamp={timestamp}&apiKey={api_key}"
-    signature = hmac.new(secret_key.encode(), pre_sign.encode(), hashlib.sha256).hexdigest()
-    return signature
 
 def decompress_gzip(data):
     buf = BytesIO(data)
@@ -28,39 +13,30 @@ def decompress_gzip(data):
 async def connect_bingx():
     uri = "wss://open-api-swap.bingx.com/swap-market"
 
-    async with websockets.connect(uri) as ws:
-        timestamp = int(time.time() * 1000)
-        signature = get_signature(timestamp, API_KEY, SECRET_KEY)
+    for attempt in range(3):  # até 3 tentativas
+        try:
+            print(f"[{datetime.now()}] 🔁 Tentativa {attempt+1}/3 - VERSÃO: v2 corrigida")
 
-        login_msg = {
-            "id": "auth",
-            "reqType": "login",
-            "apiKey": API_KEY,
-            "timestamp": timestamp,
-            "sign": signature
-        }
-        await ws.send(json.dumps(login_msg))
-        print(f"[{datetime.now()}] Enviando login...")
+            async with websockets.connect(uri) as ws:
+                subscribe_msg = {
+                    "id": "ticker-sub",
+                    "reqType": "sub",
+                    "dataType": "market/ticker:NEAR-USDT"
+                }
+                await ws.send(json.dumps(subscribe_msg))
+                print(f"[{datetime.now()}] Subscrito ao ticker NEAR-USDT.")
 
-        login_response = await ws.recv()
-        login_decompressed = decompress_gzip(login_response) if isinstance(login_response, bytes) else login_response
-        print(f"[{datetime.now()}] Login (legível): {login_decompressed}")
+                tick_raw = await ws.recv()
+                tick_decompressed = decompress_gzip(tick_raw) if isinstance(tick_raw, bytes) else tick_raw
+                print(f"[{datetime.now()}] Tick recebido (legível): {tick_decompressed}")
 
-        subscribe_msg = {
-            "id": "ticker-sub",
-            "reqType": "sub",
-            "dataType": "ticker",
-            "symbol": "NEAR-USDT"
-        }
-        await ws.send(json.dumps(subscribe_msg))
-        print(f"[{datetime.now()}] Subscrito ao ticker NEAR-USDT.")
+                await ws.close()
+                print(f"[{datetime.now()}] Conexão encerrada.")
+                break
 
-        first_tick = await ws.recv()
-        tick_decompressed = decompress_gzip(first_tick) if isinstance(first_tick, bytes) else first_tick
-        print(f"[{datetime.now()}] Tick recebido (legível): {tick_decompressed}")
-
-        await ws.close()
-        print(f"[{datetime.now()}] Conexão encerrada.")
+        except Exception as e:
+            print(f"[{datetime.now()}] ⚠️ Erro na tentativa {attempt+1}: {e}")
+            await asyncio.sleep(1)
 
 if __name__ == "__main__":
     asyncio.run(connect_bingx())
