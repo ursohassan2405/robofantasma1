@@ -1,3 +1,1 @@
-websockets>=11.0
-pandas>=2.0.0
-numpy>=1.24.0
+websocket-client==1.6.1
