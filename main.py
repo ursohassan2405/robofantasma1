@@ -1,64 +1,60 @@
-import asyncio
-import websockets
+
+import websocket
+import gzip
 import json
-import datetime
-import pandas as pd
-import os
+import time
+from datetime import datetime
 
-SYMBOL = "PENDLE-USDT"
-LOG_FILE = "log_operacoes.csv"
+symbol = "PENDLE-USDT"
+stream_url = f"wss://open-api.bingx.com/market/ws"
 
-# Inicializar CSV se não existir
-def inicializar_csv():
-    if not os.path.exists(LOG_FILE):
-        df = pd.DataFrame(columns=["timestamp", "price"])
-        df.to_csv(LOG_FILE, index=False)
+mm1_4h = None
 
-# Processar cada mensagem recebida
-async def processar_mensagem(msg):
+def atualizar_mm1(candle_timestamp, close_price):
+    global mm1_4h
+    if candle_timestamp % 14400 == 0:
+        mm1_4h = close_price
+        print(f"✅ MM1 atualizada para: {mm1_4h} às {datetime.utcfromtimestamp(candle_timestamp)}")
+
+def on_message(ws, message):
     try:
-        data = json.loads(msg)
-        if "data" in data:
-            trades = data["data"]
-            for trade in trades:
-                timestamp = datetime.datetime.fromtimestamp(trade["T"] / 1000)
-                price = float(trade["p"])
-                print(f"[{timestamp}] Preço: {price}")
-                df = pd.DataFrame([[timestamp, price]], columns=["timestamp", "price"])
-                df.to_csv(LOG_FILE, mode='a', header=False, index=False)
+        decompressed_data = gzip.decompress(message)
+        data = json.loads(decompressed_data.decode('utf-8'))
+        if "data" in data and "kline" in data["data"]:
+            kline = data["data"]["kline"]
+            ts = int(kline["t"]) // 1000
+            close = float(kline["c"])
+            atualizar_mm1(ts, close)
     except Exception as e:
-        print(f"Erro ao processar mensagem: {e}")
+        print("Erro ao processar mensagem:", e)
 
-# Loop principal de conexão
-async def conectar():
-    uri = "wss://open-api-swap.bingx.com/swap-market"
-    async with websockets.connect(uri) as ws:
-        msg_sub = json.dumps({
-            "op": "subscribe",
-            "args": [f"trade.{SYMBOL}"]
-        })
-        await ws.send(msg_sub)
+def on_error(ws, error):
+    print("Erro:", error)
 
-        print(f"✅ Conectado e inscrito no canal trade.{SYMBOL}")
+def on_close(ws, close_status_code, close_msg):
+    print("🔌 Conexão encerrada.")
 
-        while True:
-            try:
-                message = await asyncio.wait_for(ws.recv(), timeout=20)
-                await processar_mensagem(message)
-            except asyncio.TimeoutError:
-                print("⏳ Timeout. Enviando ping para manter conexão...")
-                try:
-                    await ws.send("ping")
-                except:
-                    print("❌ Falha ao enviar ping.")
-                    break
-            except websockets.ConnectionClosed:
-                print("🔌 Conexão encerrada.")
-                break
-            except Exception as e:
-                print(f"⚠️ Erro inesperado: {e}")
-                continue
+def on_open(ws):
+    print("✅ Conectado e inscrito no canal trade." + symbol)
+    subscribe_msg = {
+        "id": "mm1",
+        "reqType": "sub",
+        "dataType": f"kline_{symbol}_14400"
+    }
+    ws.send(json.dumps(subscribe_msg))
+
+def run():
+    while True:
+        try:
+            ws = websocket.WebSocketApp(stream_url,
+                                        on_open=on_open,
+                                        on_message=on_message,
+                                        on_error=on_error,
+                                        on_close=on_close)
+            ws.run_forever(ping_interval=20)
+        except Exception as e:
+            print("Erro na conexão websocket:", e)
+        time.sleep(5)
 
 if __name__ == "__main__":
-    inicializar_csv()
-    asyncio.run(conectar())
+    run()
