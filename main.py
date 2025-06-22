@@ -1,7 +1,9 @@
+
 import asyncio
 import websockets
 import json
 import pandas as pd
+import os
 import numpy as np
 from datetime import datetime, timedelta
 from collections import defaultdict, deque
@@ -12,6 +14,7 @@ BE_PCT = 0.01
 TRAILING_PCT = 0.036
 VALOR_USDT = 10
 LOG_FILE = "log_operacoes.csv"
+TIMEFRAME_MIN = 120  # minutos
 
 price_history = {symbol: deque(maxlen=120) for symbol in SYMBOLS}
 last_indicator_update = {symbol: None for symbol in SYMBOLS}
@@ -62,7 +65,7 @@ def calcular_indicadores(symbol):
     loss = np.mean(np.maximum(-delta[-rsi_period:], 0))
     rs = gain / loss if loss != 0 else 0
     rsi = 100 - (100 / (1 + rs))
-    sma = np.mean(closes[-1:])  # média de 1 período (último preço)
+    sma = np.mean(closes[-1:])  # média de 1 período
     center = (max(closes[-1], closes[-2]) + min(closes[-1], closes[-2]) + closes[-1]) / 3
     indicators_cache[symbol] = {
         "RSI": rsi,
@@ -82,9 +85,9 @@ def verificar_sinal(symbol, price, timestamp):
     dist1 = abs(price - indic["CENTER"]) / indic["CENTER"]
     dist2 = abs(price - indic["MA1"]) / indic["MA1"]
     if dist1 >= 0.02 and dist2 >= 0.02:
-        if price > indic["MA1"] and 35 < indic["RSI"] < 73:
+        if price > indic["MA1"] and indic["RSI"] > 35 and indic["RSI"] < 73:
             return "BUY"
-        if price < indic["MA1"] and 35 < indic["RSI"] < 73:
+        if price < indic["MA1"] and indic["RSI"] > 35 and indic["RSI"] < 73:
             return "SELL"
         if last_distance_reentry_time[symbol] is None or (timestamp - last_distance_reentry_time[symbol]).total_seconds() >= 900:
             last_distance_reentry_time[symbol] = timestamp
@@ -118,10 +121,11 @@ def atualizar_trades(symbol, price):
     for pos in ativos:
         pos["max_price"] = max(pos["max_price"], price)
         pos["min_price"] = min(pos["min_price"], price)
-        if not pos["be"] and ((pos["tipo"] == "BUY" and price >= pos["tp1"]) or (pos["tipo"] == "SELL" and price <= pos["tp1"])):
-            pos["sl"] = pos["entrada"]
-            pos["be"] = True
-            print(f"[{now_br().strftime('%Y-%m-%d %H:%M:%S')}] BREAK-EVEN {symbol}")
+        if not pos["be"]:
+            if (pos["tipo"] == "BUY" and price >= pos["tp1"]) or (pos["tipo"] == "SELL" and price <= pos["tp1"]):
+                pos["sl"] = pos["entrada"]
+                pos["be"] = True
+                print(f"[{now_br().strftime('%Y-%m-%d %H:%M:%S')}] BREAK-EVEN {symbol}")
         if pos["be"]:
             trailing_price = pos["max_price"] * (1 - TRAILING_PCT) if pos["tipo"] == "BUY" else pos["min_price"] * (1 + TRAILING_PCT)
             if (pos["tipo"] == "BUY" and trailing_price > pos["sl"]) or (pos["tipo"] == "SELL" and trailing_price < pos["sl"]):
@@ -152,7 +156,7 @@ async def stream_bingx():
                     try:
                         msg = await ws.recv()
                         data = json.loads(msg)
-                        if "data" in data and isinstance(data["data"], list) and "symbol" in data:
+                        if "data" in data and isinstance(data["data"], list):
                             price = float(data["data"][0]["price"])
                             symbol = data["symbol"]
                             agora = datetime.utcnow()
