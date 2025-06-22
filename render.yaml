@@ -1,9 +1,7 @@
-
 services:
   - type: web
-    name: robofantasma1
+    name: bottoman-v1
     env: python
-    plan: free
     buildCommand: ""
-    startCommand: python main.py
-    rootDir: .
+    startCommand: "python main.py"
+    plan: free

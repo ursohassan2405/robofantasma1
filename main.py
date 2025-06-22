@@ -1,23 +1,33 @@
-import websocket
 
-def on_message(ws, message):
-    print(f"Mensagem recebida: {message}")
+import time
+from datetime import datetime, timedelta
 
-def on_error(ws, error):
-    print(f"Erro: {error}")
+# Simula análise de sinais
+def detectar_sinais():
+    return ["SOL/USDT", "RENDER/USDT", "TIA/USDT", "ONDO/USDT", "AI16Z/USDT", "NEAR/USDT", "PENDLE/USDT"]
 
-def on_close(ws, close_status_code, close_msg):
-    print("Conexão encerrada")
+# Parâmetros
+stop_loss = 2.0
+quantidade = 10
+intervalo_reentrada_min = 10
 
-def on_open(ws):
-    print("Conexão aberta")
-    ws.send("ping")
+# Histórico dos últimos sinais (em memória)
+historico_sinais = {}
 
-if __name__ == "__main__":
-    socket = "wss://stream.binance.com:9443/ws/pendleusdt@trade"
-    ws = websocket.WebSocketApp(socket,
-                                on_open=on_open,
-                                on_message=on_message,
-                                on_error=on_error,
-                                on_close=on_close)
-    ws.run_forever()
+print("Robô iniciado em", datetime.now())
+
+while True:
+    sinais = detectar_sinais()
+    agora = datetime.now()
+
+    for par in sinais:
+        ultimo = historico_sinais.get(par)
+
+        if not ultimo or (agora - ultimo) > timedelta(minutes=intervalo_reentrada_min):
+            print(f"[BUY] {par} - Qtd: {quantidade} - SL: {stop_loss}%")
+            historico_sinais[par] = agora
+        else:
+            tempo_restante = intervalo_reentrada_min - (agora - ultimo).seconds // 60
+            print(f"[IGNORADO] {par} - aguardando {tempo_restante} min para nova entrada")
+
+    time.sleep(1)
