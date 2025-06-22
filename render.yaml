@@ -1,7 +1,13 @@
 services:
   - type: web
-    name: bottoman-v1
-    env: python
+    name: bingx-auth-ticker
+    runtime: python
+    region: oregon
+    plan: free
     buildCommand: ""
     startCommand: "python main.py"
-    plan: free
+    envVars:
+      - key: BINGX_API_KEY
+        value: ${BINGX_API_KEY}
+      - key: BINGX_SECRET_KEY
+        value: ${BINGX_SECRET_KEY}

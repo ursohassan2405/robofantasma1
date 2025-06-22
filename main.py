@@ -1,33 +1,56 @@
-
+import asyncio
+import websockets
+import hmac
+import hashlib
+import base64
+import json
 import time
-from datetime import datetime, timedelta
+import os
+from dotenv import load_dotenv
+from datetime import datetime
 
-# Simula análise de sinais
-def detectar_sinais():
-    return ["SOL/USDT", "RENDER/USDT", "TIA/USDT", "ONDO/USDT", "AI16Z/USDT", "NEAR/USDT", "PENDLE/USDT"]
+load_dotenv()
+API_KEY = os.getenv("BINGX_API_KEY")
+SECRET_KEY = os.getenv("BINGX_SECRET_KEY")
 
-# Parâmetros
-stop_loss = 2.0
-quantidade = 10
-intervalo_reentrada_min = 10
+def get_signature(timestamp, api_key, secret_key):
+    pre_sign = f"timestamp={timestamp}&apiKey={api_key}"
+    signature = hmac.new(secret_key.encode(), pre_sign.encode(), hashlib.sha256).hexdigest()
+    return signature
 
-# Histórico dos últimos sinais (em memória)
-historico_sinais = {}
+async def connect_bingx():
+    uri = "wss://open-api-swap.bingx.com/swap-market"
 
-print("Robô iniciado em", datetime.now())
+    async with websockets.connect(uri) as ws:
+        timestamp = int(time.time() * 1000)
+        signature = get_signature(timestamp, API_KEY, SECRET_KEY)
 
-while True:
-    sinais = detectar_sinais()
-    agora = datetime.now()
+        login_msg = {
+            "id": "auth",
+            "reqType": "login",
+            "apiKey": API_KEY,
+            "timestamp": timestamp,
+            "sign": signature
+        }
+        await ws.send(json.dumps(login_msg))
+        print(f"[{datetime.now()}] Enviando login...")
 
-    for par in sinais:
-        ultimo = historico_sinais.get(par)
+        login_response = await ws.recv()
+        print(f"[{datetime.now()}] Login: {login_response}")
 
-        if not ultimo or (agora - ultimo) > timedelta(minutes=intervalo_reentrada_min):
-            print(f"[BUY] {par} - Qtd: {quantidade} - SL: {stop_loss}%")
-            historico_sinais[par] = agora
-        else:
-            tempo_restante = intervalo_reentrada_min - (agora - ultimo).seconds // 60
-            print(f"[IGNORADO] {par} - aguardando {tempo_restante} min para nova entrada")
+        subscribe_msg = {
+            "id": "ticker-sub",
+            "reqType": "sub",
+            "dataType": "ticker",
+            "symbol": "NEAR-USDT"
+        }
+        await ws.send(json.dumps(subscribe_msg))
+        print(f"[{datetime.now()}] Subscrito ao ticker NEAR-USDT.")
 
-    time.sleep(1)
+        first_tick = await ws.recv()
+        print(f"[{datetime.now()}] Tick recebido: {first_tick}")
+        await ws.close()
+        print(f"[{datetime.now()}] Conexão encerrada.")
+
+if __name__ == "__main__":
+    asyncio.run(connect_bingx())
